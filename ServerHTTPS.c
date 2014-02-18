@@ -19,6 +19,7 @@
 #include <pthread.h>
 
 #include <openssl/ssl.h>
+#include <openssl/ssl3.h>
 
 #include "SocketTCP.h"
 
@@ -68,42 +69,536 @@ void sigaction(int s) {
  * CD : 01 = RSA, 02 = DSA, 03 = ECDSA
  */
 
+char *get_version(SSL *ssl) {
+	switch (ssl->version) {
+	case SSL2_VERSION:
+		return "SSL 2.0";
+	case SSL3_VERSION:
+		return "SSL 3.0 ";
+	case TLS1_VERSION:
+		return "TLS 1.0 ";
+	case TLS1_1_VERSION:
+		return "TLS 1.1 ";
+	case TLS1_2_VERSION:
+		return "TLS 1.2 ";
+	case DTLS1_VERSION:
+		return "DTLS 1.0 ";
+	case DTLS1_BAD_VER:
+		return "DTLS 1.0 (bad) ";
+	default:
+		return "???";
+	}
+}
+
+char *get_ecc_list(SSL *ssl) {
+	char *ecc = NULL;
+	ecc = (char *) malloc(1024);
+	memset(ecc, 0, sizeof(ecc));
+	strcpy(ecc, "<h5>Courbes elliptiques :</h5>\n");
+	unsigned char *clist = ssl->session->tlsext_ellipticcurvelist;
+	size_t clistlen = ssl->session->tlsext_ellipticcurvelist_length / 2;
+	size_t j;
+	unsigned int cid, nid;
+	for (size_t j = 0; j < clistlen; j++) {
+		n2s(clist, cid);
+		nid = tls1_ec_curve_id2nid(cid);
+		if (nid != 0) {
+			switch (nid) {
+			case NID_sect163k1: /* sect163k1 (1) */
+				strcat(ecc, "sect163k1");
+				break;
+			case NID_sect163r1: /* sect163r1 (2) */
+				strcat(ecc, "sect163r1");
+				break;
+			case NID_sect163r2: /* sect163r2 (3) */
+				strcat(ecc, "sect163r2");
+				break;
+			case NID_sect193r1: /* sect193r1 (4) */
+				strcat(ecc, "sect193r1");
+				break;
+			case NID_sect193r2: /* sect193r2 (5) */
+				strcat(ecc, "sect193r2");
+				break;
+			case NID_sect233k1: /* sect233k1 (6) */
+				strcat(ecc, "sect233k1");
+				break;
+			case NID_sect233r1: /* sect233r1 (7) */
+				strcat(ecc, "sect233r1");
+				break;
+			case NID_sect239k1: /* sect239k1 (8) */
+				strcat(ecc, "sect239k1");
+				break;
+			case NID_sect283k1: /* sect283k1 (9) */
+				strcat(ecc, "sect283k1");
+				break;
+			case NID_sect283r1: /* sect283r1 (10) */
+				strcat(ecc, "sect283r1");
+				break;
+			case NID_sect409k1: /* sect409k1 (11) */
+				strcat(ecc, "sect409k1");
+				break;
+			case NID_sect409r1: /* sect409r1 (12) */
+				strcat(ecc, "sect409r1");
+				break;
+			case NID_sect571k1: /* sect571k1 (13) */
+				strcat(ecc, "sect571k1");
+				break;
+			case NID_sect571r1: /* sect571r1 (14) */
+				strcat(ecc, "sect571r1");
+				break;
+			case NID_secp160k1: /* secp160k1 (15) */
+				strcat(ecc, "secp160k1");
+				break;
+			case NID_secp160r1: /* secp160r1 (16) */
+				strcat(ecc, "secp160r1");
+				break;
+			case NID_secp160r2: /* secp160r2 (17) */
+				strcat(ecc, "secp160r2");
+				break;
+			case NID_secp192k1: /* secp192k1 (18) */
+				strcat(ecc, "secp192k1");
+				break;
+			case NID_X9_62_prime192v1: /* secp192r1 (19) */
+				strcat(ecc, "secp192r1");
+				break;
+			case NID_secp224k1: /* secp224k1 (20) */
+				strcat(ecc, "secp224k1");
+				break;
+			case NID_secp224r1: /* secp224r1 (21) */
+				strcat(ecc, "secp224r1");
+				break;
+			case NID_secp256k1: /* secp256k1 (22) */
+				strcat(ecc, "secp256k1");
+				break;
+			case NID_X9_62_prime256v1: /* secp256r1 (23) */
+				strcat(ecc, "secp256r1");
+				break;
+			case NID_secp384r1: /* secp384r1 (24) */
+				strcat(ecc, "secp384r1");
+				break;
+			case NID_secp521r1: /* secp521r1 (25) */
+				strcat(ecc, "secp521r1");
+				break;
+			default:
+				break;
+			}
+			strcat(ecc, ", ");
+		}
+	}
+	ecc[strlen(ecc) - 2] = '\0';
+	return ecc;
+}
+
+char *get_cipher_suite_string(SSL_CIPHER *c) {
+	switch (c->id) {
+	case SSL3_CK_RSA_NULL_MD5:
+	 return "SSL3_RSA_NULL_MD5";
+	case SSL3_CK_RSA_NULL_SHA:
+	 return "SSL3_RSA_NULL_SHA";
+	case SSL3_CK_RSA_RC4_40_MD5:
+	 return "SSL3_RSA_RC4_40_MD5";
+	case SSL3_CK_RSA_RC4_128_MD5:
+	 return "SSL3_RSA_RC4_128_MD5";
+	case SSL3_CK_RSA_RC4_128_SHA:
+	 return "SSL3_RSA_RC4_128_SHA";
+	case SSL3_CK_RSA_RC2_40_MD5:
+	 return "SSL3_RSA_RC2_40_MD5";
+	case SSL3_CK_RSA_IDEA_128_SHA:
+	 return "SSL3_RSA_IDEA_128_SHA";
+	case SSL3_CK_RSA_DES_40_CBC_SHA:
+	 return "SSL3_RSA_DES_40_CBC_SHA";
+	case SSL3_CK_RSA_DES_64_CBC_SHA:
+	 return "SSL3_RSA_DES_64_CBC_SHA";
+	case SSL3_CK_RSA_DES_192_CBC3_SHA:
+	 return "SSL3_RSA_DES_192_CBC3_SHA";
+
+	case SSL3_CK_DH_DSS_DES_40_CBC_SHA:
+	 return "SSL3_DH_DSS_DES_40_CBC_SHA";
+	case SSL3_CK_DH_DSS_DES_64_CBC_SHA:
+	 return "SSL3_DH_DSS_DES_64_CBC_SHA";
+	case SSL3_CK_DH_DSS_DES_192_CBC3_SHA:
+	 return "SSL3_DH_DSS_DES_192_CBC3_SHA";
+	case SSL3_CK_DH_RSA_DES_40_CBC_SHA:
+	 return "SSL3_DH_RSA_DES_40_CBC_SHA";
+	case SSL3_CK_DH_RSA_DES_64_CBC_SHA:
+	 return "SSL3_DH_RSA_DES_64_CBC_SHA";
+	case SSL3_CK_DH_RSA_DES_192_CBC3_SHA:
+	 return "SSL3_DH_RSA_DES_192_CBC3_SHA";
+
+
+	case SSL3_CK_EDH_DSS_DES_40_CBC_SHA:
+	 return "SSL3_EDH_DSS_DES_40_CBC_SHA";
+
+	case SSL3_CK_EDH_DSS_DES_64_CBC_SHA:
+	 return "SSL3_EDH_DSS_DES_64_CBC_SHA";
+
+	case SSL3_CK_EDH_DSS_DES_192_CBC3_SHA:
+
+	 return "SSL3_DHE_RSA_DES_40_CBC_SHA";
+	case SSL3_CK_EDH_RSA_DES_40_CBC_SHA:
+	 return "SSL3_EDH_RSA_DES_40_CBC_SHA";
+
+	case SSL3_CK_EDH_RSA_DES_64_CBC_SHA:
+	 return "SSL3_EDH_RSA_DES_64_CBC_SHA";
+
+	case SSL3_CK_EDH_RSA_DES_192_CBC3_SHA:
+	 return "SSL3_EDH_RSA_DES_192_CBC3_SHA";
+
+	case SSL3_CK_ADH_RC4_40_MD5:
+	 return "SSL3_ADH_RC4_40_MD5";
+	case SSL3_CK_ADH_RC4_128_MD5:
+	 return "SSL3_ADH_RC4_128_MD5";
+	case SSL3_CK_ADH_DES_40_CBC_SHA:
+	 return "SSL3_ADH_DES_40_CBC_SHA";
+	case SSL3_CK_ADH_DES_64_CBC_SHA:
+	 return "SSL3_ADH_DES_64_CBC_SHA";
+	case SSL3_CK_ADH_DES_192_CBC_SHA:
+	 return "SSL3_ADH_DES_192_CBC_SHA";
+
+	/*    VRS Additional Kerberos5 entries
+	 */
+	case SSL3_CK_KRB5_DES_64_CBC_SHA:
+	 return "SSL3_KRB5_DES_64_CBC_SHA";
+	case SSL3_CK_KRB5_DES_192_CBC3_SHA:
+	 return "SSL3_KRB5_DES_192_CBC3_SHA";
+	case SSL3_CK_KRB5_RC4_128_SHA:
+	 return "SSL3_KRB5_RC4_128_SHA";
+	case SSL3_CK_KRB5_IDEA_128_CBC_SHA:
+	 return "SSL3_KRB5_IDEA_128_CBC_SHA";
+	case SSL3_CK_KRB5_DES_64_CBC_MD5:
+	 return "SSL3_KRB5_DES_64_CBC_MD5";
+	case SSL3_CK_KRB5_DES_192_CBC3_MD5:
+	 return "SSL3_KRB5_DES_192_CBC3_MD5";
+	case SSL3_CK_KRB5_RC4_128_MD5:
+	 return "SSL3_KRB5_RC4_128_MD5";
+	case SSL3_CK_KRB5_IDEA_128_CBC_MD5:
+	 return "SSL3_KRB5_IDEA_128_CBC_MD5";
+
+	case SSL3_CK_KRB5_DES_40_CBC_SHA:
+	 return "SSL3_KRB5_DES_40_CBC_SHA";
+	case SSL3_CK_KRB5_RC2_40_CBC_SHA:
+	 return "SSL3_KRB5_RC2_40_CBC_SHA";
+	case SSL3_CK_KRB5_RC4_40_SHA:
+	 return "SSL3_KRB5_RC4_40_SHA";
+	case SSL3_CK_KRB5_DES_40_CBC_MD5:
+	 return "SSL3_KRB5_DES_40_CBC_MD5";
+	case SSL3_CK_KRB5_RC2_40_CBC_MD5:
+	 return "SSL3_KRB5_RC2_40_CBC_MD5";
+	case SSL3_CK_KRB5_RC4_40_MD5:
+	 return "SSL3_KRB5_RC4_40_MD5";
+
+	/* PSK ciphersuites from 4279 */
+	case TLS1_CK_PSK_WITH_RC4_128_SHA:
+	 return "TLS1_PSK_WITH_RC4_128_SHA";
+	case TLS1_CK_PSK_WITH_3DES_EDE_CBC_SHA:
+	 return "TLS1_PSK_WITH_3DES_EDE_CBC_SHA";
+	case TLS1_CK_PSK_WITH_AES_128_CBC_SHA:
+	 return "TLS1_PSK_WITH_AES_128_CBC_SHA";
+	case TLS1_CK_PSK_WITH_AES_256_CBC_SHA:
+	 return "TLS1_PSK_WITH_AES_256_CBC_SHA";
+
+	/* Additional TLS ciphersuites from expired Internet Draft
+	 * draft-ietf-tls-56-bit-ciphersuites-01.txt
+	case *:
+	 return "*";
+	 * s3_lib.c).  We actually treat them like SSL 3.0 ciphers, which we probably
+	 * shouldn't.  Note that the first two are actually not in the IDs. */
+	case TLS1_CK_RSA_EXPORT1024_WITH_RC4_56_MD5:
+	 return "TLS1_RSA_EXPORT1024_WITH_RC4_56_MD5";
+	case TLS1_CK_RSA_EXPORT1024_WITH_RC2_CBC_56_MD5:
+	 return "TLS1_RSA_EXPORT1024_WITH_RC2_CBC_56_MD5";
+	case TLS1_CK_RSA_EXPORT1024_WITH_DES_CBC_SHA:
+	 return "TLS1_RSA_EXPORT1024_WITH_DES_CBC_SHA";
+	case TLS1_CK_DHE_DSS_EXPORT1024_WITH_DES_CBC_SHA:
+	 return "TLS1_DHE_DSS_EXPORT1024_WITH_DES_CBC_SHA";
+	case TLS1_CK_RSA_EXPORT1024_WITH_RC4_56_SHA:
+	 return "TLS1_RSA_EXPORT1024_WITH_RC4_56_SHA";
+	case TLS1_CK_DHE_DSS_EXPORT1024_WITH_RC4_56_SHA:
+	 return "TLS1_DHE_DSS_EXPORT1024_WITH_RC4_56_SHA";
+	case TLS1_CK_DHE_DSS_WITH_RC4_128_SHA:
+	 return "TLS1_DHE_DSS_WITH_RC4_128_SHA";
+
+	/* AES ciphersuites from RFC3268 */
+
+	case TLS1_CK_RSA_WITH_AES_128_SHA:
+	 return "TLS1_RSA_WITH_AES_128_SHA";
+	case TLS1_CK_DH_DSS_WITH_AES_128_SHA:
+	 return "TLS1_DH_DSS_WITH_AES_128_SHA";
+	case TLS1_CK_DH_RSA_WITH_AES_128_SHA:
+	 return "TLS1_DH_RSA_WITH_AES_128_SHA";
+	case TLS1_CK_DHE_DSS_WITH_AES_128_SHA:
+	 return "TLS1_DHE_DSS_WITH_AES_128_SHA";
+	case TLS1_CK_DHE_RSA_WITH_AES_128_SHA:
+	 return "TLS1_DHE_RSA_WITH_AES_128_SHA";
+	case TLS1_CK_ADH_WITH_AES_128_SHA:
+	 return "TLS1_ADH_WITH_AES_128_SHA";
+
+	case TLS1_CK_RSA_WITH_AES_256_SHA:
+	 return "TLS1_RSA_WITH_AES_256_SHA";
+	case TLS1_CK_DH_DSS_WITH_AES_256_SHA:
+	 return "TLS1_DH_DSS_WITH_AES_256_SHA";
+	case TLS1_CK_DH_RSA_WITH_AES_256_SHA:
+	 return "TLS1_DH_RSA_WITH_AES_256_SHA";
+	case TLS1_CK_DHE_DSS_WITH_AES_256_SHA:
+	 return "TLS1_DHE_DSS_WITH_AES_256_SHA";
+	case TLS1_CK_DHE_RSA_WITH_AES_256_SHA:
+	 return "TLS1_DHE_RSA_WITH_AES_256_SHA";
+	case TLS1_CK_ADH_WITH_AES_256_SHA:
+	 return "TLS1_ADH_WITH_AES_256_SHA";
+
+	/* TLS v1.2 ciphersuites */
+	case TLS1_CK_RSA_WITH_NULL_SHA256:
+	 return "TLS1_RSA_WITH_NULL_SHA256";
+	case TLS1_CK_RSA_WITH_AES_128_SHA256:
+	 return "TLS1_RSA_WITH_AES_128_SHA256";
+	case TLS1_CK_RSA_WITH_AES_256_SHA256:
+	 return "TLS1_RSA_WITH_AES_256_SHA256";
+	case TLS1_CK_DH_DSS_WITH_AES_128_SHA256:
+	 return "TLS1_DH_DSS_WITH_AES_128_SHA256";
+	case TLS1_CK_DH_RSA_WITH_AES_128_SHA256:
+	 return "TLS1_DH_RSA_WITH_AES_128_SHA256";
+	case TLS1_CK_DHE_DSS_WITH_AES_128_SHA256:
+	 return "TLS1_DHE_DSS_WITH_AES_128_SHA256";
+
+	/* Camellia ciphersuites from RFC4132 */
+	case TLS1_CK_RSA_WITH_CAMELLIA_128_CBC_SHA:
+	 return "TLS1_RSA_WITH_CAMELLIA_128_CBC_SHA";
+	case TLS1_CK_DH_DSS_WITH_CAMELLIA_128_CBC_SHA:
+	 return "TLS1_DH_DSS_WITH_CAMELLIA_128_CBC_SHA";
+	case TLS1_CK_DH_RSA_WITH_CAMELLIA_128_CBC_SHA:
+	 return "TLS1_DH_RSA_WITH_CAMELLIA_128_CBC_SHA";
+	case TLS1_CK_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA:
+	 return "TLS1_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA";
+	case TLS1_CK_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA:
+	 return "TLS1_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA";
+	case TLS1_CK_ADH_WITH_CAMELLIA_128_CBC_SHA:
+	 return "TLS1_ADH_WITH_CAMELLIA_128_CBC_SHA";
+
+	/* TLS v1.2 ciphersuites */
+	case TLS1_CK_DHE_RSA_WITH_AES_128_SHA256:
+	 return "TLS1_DHE_RSA_WITH_AES_128_SHA256";
+	case TLS1_CK_DH_DSS_WITH_AES_256_SHA256:
+	 return "TLS1_DH_DSS_WITH_AES_256_SHA256";
+	case TLS1_CK_DH_RSA_WITH_AES_256_SHA256:
+	 return "TLS1_DH_RSA_WITH_AES_256_SHA256";
+	case TLS1_CK_DHE_DSS_WITH_AES_256_SHA256:
+	 return "TLS1_DHE_DSS_WITH_AES_256_SHA256";
+	case TLS1_CK_DHE_RSA_WITH_AES_256_SHA256:
+	 return "TLS1_DHE_RSA_WITH_AES_256_SHA256";
+	case TLS1_CK_ADH_WITH_AES_128_SHA256:
+	 return "TLS1_ADH_WITH_AES_128_SHA256";
+	case TLS1_CK_ADH_WITH_AES_256_SHA256:
+	 return "TLS1_ADH_WITH_AES_256_SHA256";
+
+	/* Camellia ciphersuites from RFC4132 */
+	case TLS1_CK_RSA_WITH_CAMELLIA_256_CBC_SHA:
+	 return "TLS1_RSA_WITH_CAMELLIA_256_CBC_SHA";
+	case TLS1_CK_DH_DSS_WITH_CAMELLIA_256_CBC_SHA:
+	 return "TLS1_DH_DSS_WITH_CAMELLIA_256_CBC_SHA";
+	case TLS1_CK_DH_RSA_WITH_CAMELLIA_256_CBC_SHA:
+	 return "TLS1_DH_RSA_WITH_CAMELLIA_256_CBC_SHA";
+	case TLS1_CK_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA:
+	 return "TLS1_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA";
+	case TLS1_CK_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA:
+	 return "TLS1_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA";
+	case TLS1_CK_ADH_WITH_CAMELLIA_256_CBC_SHA:
+	 return "TLS1_ADH_WITH_CAMELLIA_256_CBC_SHA";
+
+	/* SEED ciphersuites from RFC4162 */
+	case TLS1_CK_RSA_WITH_SEED_SHA:
+	 return "TLS1_RSA_WITH_SEED_SHA";
+	case TLS1_CK_DH_DSS_WITH_SEED_SHA:
+	 return "TLS1_DH_DSS_WITH_SEED_SHA";
+	case TLS1_CK_DH_RSA_WITH_SEED_SHA:
+	 return "TLS1_DH_RSA_WITH_SEED_SHA";
+	case TLS1_CK_DHE_DSS_WITH_SEED_SHA:
+	 return "TLS1_DHE_DSS_WITH_SEED_SHA";
+	case TLS1_CK_DHE_RSA_WITH_SEED_SHA:
+	 return "TLS1_DHE_RSA_WITH_SEED_SHA";
+	case TLS1_CK_ADH_WITH_SEED_SHA:
+	 return "TLS1_ADH_WITH_SEED_SHA";
+
+	/* TLS v1.2 GCM ciphersuites from RFC5288 */
+	case TLS1_CK_RSA_WITH_AES_128_GCM_SHA256:
+	 return "TLS1_RSA_WITH_AES_128_GCM_SHA256";
+	case TLS1_CK_RSA_WITH_AES_256_GCM_SHA384:
+	 return "TLS1_RSA_WITH_AES_256_GCM_SHA384";
+	case TLS1_CK_DHE_RSA_WITH_AES_128_GCM_SHA256:
+	 return "TLS1_DHE_RSA_WITH_AES_128_GCM_SHA256";
+	case TLS1_CK_DHE_RSA_WITH_AES_256_GCM_SHA384:
+	 return "TLS1_DHE_RSA_WITH_AES_256_GCM_SHA384";
+	case TLS1_CK_DH_RSA_WITH_AES_128_GCM_SHA256:
+	 return "TLS1_DH_RSA_WITH_AES_128_GCM_SHA256";
+	case TLS1_CK_DH_RSA_WITH_AES_256_GCM_SHA384:
+	 return "TLS1_DH_RSA_WITH_AES_256_GCM_SHA384";
+	case TLS1_CK_DHE_DSS_WITH_AES_128_GCM_SHA256:
+	 return "TLS1_DHE_DSS_WITH_AES_128_GCM_SHA256";
+	case TLS1_CK_DHE_DSS_WITH_AES_256_GCM_SHA384:
+	 return "TLS1_DHE_DSS_WITH_AES_256_GCM_SHA384";
+	case TLS1_CK_DH_DSS_WITH_AES_128_GCM_SHA256:
+	 return "TLS1_DH_DSS_WITH_AES_128_GCM_SHA256";
+	case TLS1_CK_DH_DSS_WITH_AES_256_GCM_SHA384:
+	 return "TLS1_DH_DSS_WITH_AES_256_GCM_SHA384";
+	case TLS1_CK_ADH_WITH_AES_128_GCM_SHA256:
+	 return "TLS1_ADH_WITH_AES_128_GCM_SHA256";
+	case TLS1_CK_ADH_WITH_AES_256_GCM_SHA384:
+	 return "TLS1_ADH_WITH_AES_256_GCM_SHA384";
+
+	/* ECC ciphersuites from draft-ietf-tls-ecc-12.txt with changes soon to be in draft 13 */
+	case TLS1_CK_ECDH_ECDSA_WITH_NULL_SHA:
+	 return "TLS1_ECDH_ECDSA_WITH_NULL_SHA";
+	case TLS1_CK_ECDH_ECDSA_WITH_RC4_128_SHA:
+	 return "TLS1_ECDH_ECDSA_WITH_RC4_128_SHA";
+	case TLS1_CK_ECDH_ECDSA_WITH_DES_192_CBC3_SHA:
+	 return "TLS1_ECDH_ECDSA_WITH_DES_192_CBC3_SHA";
+	case TLS1_CK_ECDH_ECDSA_WITH_AES_128_CBC_SHA:
+	 return "TLS1_ECDH_ECDSA_WITH_AES_128_CBC_SHA";
+	case TLS1_CK_ECDH_ECDSA_WITH_AES_256_CBC_SHA:
+	 return "TLS1_ECDH_ECDSA_WITH_AES_256_CBC_SHA";
+
+	case TLS1_CK_ECDHE_ECDSA_WITH_NULL_SHA:
+	 return "TLS1_ECDHE_ECDSA_WITH_NULL_SHA";
+	case TLS1_CK_ECDHE_ECDSA_WITH_RC4_128_SHA:
+	 return "TLS1_ECDHE_ECDSA_WITH_RC4_128_SHA";
+	case TLS1_CK_ECDHE_ECDSA_WITH_DES_192_CBC3_SHA:
+	 return "TLS1_ECDHE_ECDSA_WITH_DES_192_CBC3_SHA";
+	case TLS1_CK_ECDHE_ECDSA_WITH_AES_128_CBC_SHA:
+	 return "TLS1_ECDHE_ECDSA_WITH_AES_128_CBC_SHA";
+	case TLS1_CK_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:
+	 return "TLS1_ECDHE_ECDSA_WITH_AES_256_CBC_SHA";
+
+	case TLS1_CK_ECDH_RSA_WITH_NULL_SHA:
+	 return "TLS1_ECDH_RSA_WITH_NULL_SHA";
+	case TLS1_CK_ECDH_RSA_WITH_RC4_128_SHA:
+	 return "TLS1_ECDH_RSA_WITH_RC4_128_SHA";
+	case TLS1_CK_ECDH_RSA_WITH_DES_192_CBC3_SHA:
+	 return "TLS1_ECDH_RSA_WITH_DES_192_CBC3_SHA";
+	case TLS1_CK_ECDH_RSA_WITH_AES_128_CBC_SHA:
+	 return "TLS1_ECDH_RSA_WITH_AES_128_CBC_SHA";
+	case TLS1_CK_ECDH_RSA_WITH_AES_256_CBC_SHA:
+	 return "TLS1_ECDH_RSA_WITH_AES_256_CBC_SHA";
+
+	case TLS1_CK_ECDHE_RSA_WITH_NULL_SHA:
+	 return "TLS1_ECDHE_RSA_WITH_NULL_SHA";
+	case TLS1_CK_ECDHE_RSA_WITH_RC4_128_SHA:
+	 return "TLS1_ECDHE_RSA_WITH_RC4_128_SHA";
+	case TLS1_CK_ECDHE_RSA_WITH_DES_192_CBC3_SHA:
+	 return "TLS1_ECDHE_RSA_WITH_DES_192_CBC3_SHA";
+	case TLS1_CK_ECDHE_RSA_WITH_AES_128_CBC_SHA:
+	 return "TLS1_ECDHE_RSA_WITH_AES_128_CBC_SHA";
+	case TLS1_CK_ECDHE_RSA_WITH_AES_256_CBC_SHA:
+	 return "TLS1_ECDHE_RSA_WITH_AES_256_CBC_SHA";
+
+	case TLS1_CK_ECDH_anon_WITH_NULL_SHA:
+	 return "TLS1_ECDH_anon_WITH_NULL_SHA";
+	case TLS1_CK_ECDH_anon_WITH_RC4_128_SHA:
+	 return "TLS1_ECDH_anon_WITH_RC4_128_SHA";
+	case TLS1_CK_ECDH_anon_WITH_DES_192_CBC3_SHA:
+	 return "TLS1_ECDH_anon_WITH_DES_192_CBC3_SHA";
+	case TLS1_CK_ECDH_anon_WITH_AES_128_CBC_SHA:
+	 return "TLS1_ECDH_anon_WITH_AES_128_CBC_SHA";
+	case TLS1_CK_ECDH_anon_WITH_AES_256_CBC_SHA:
+	 return "TLS1_ECDH_anon_WITH_AES_256_CBC_SHA";
+
+	/* SRP ciphersuites from RFC 5054 */
+	case TLS1_CK_SRP_SHA_WITH_3DES_EDE_CBC_SHA:
+	 return "TLS1_SRP_SHA_WITH_3DES_EDE_CBC_SHA";
+	case TLS1_CK_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA:
+	 return "TLS1_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA";
+	case TLS1_CK_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA:
+	 return "TLS1_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA";
+	case TLS1_CK_SRP_SHA_WITH_AES_128_CBC_SHA:
+	 return "TLS1_SRP_SHA_WITH_AES_128_CBC_SHA";
+	case TLS1_CK_SRP_SHA_RSA_WITH_AES_128_CBC_SHA:
+	 return "TLS1_SRP_SHA_RSA_WITH_AES_128_CBC_SHA";
+	case TLS1_CK_SRP_SHA_DSS_WITH_AES_128_CBC_SHA:
+	 return "TLS1_SRP_SHA_DSS_WITH_AES_128_CBC_SHA";
+	case TLS1_CK_SRP_SHA_WITH_AES_256_CBC_SHA:
+	 return "TLS1_SRP_SHA_WITH_AES_256_CBC_SHA";
+	case TLS1_CK_SRP_SHA_RSA_WITH_AES_256_CBC_SHA:
+	 return "TLS1_SRP_SHA_RSA_WITH_AES_256_CBC_SHA";
+	case TLS1_CK_SRP_SHA_DSS_WITH_AES_256_CBC_SHA:
+	 return "TLS1_SRP_SHA_DSS_WITH_AES_256_CBC_SHA";
+
+	/* ECDH HMAC based ciphersuites from RFC5289 */
+
+	case TLS1_CK_ECDHE_ECDSA_WITH_AES_128_SHA256:
+	 return "TLS1_ECDHE_ECDSA_WITH_AES_128_SHA256";
+	case TLS1_CK_ECDHE_ECDSA_WITH_AES_256_SHA384:
+	 return "TLS1_ECDHE_ECDSA_WITH_AES_256_SHA384";
+	case TLS1_CK_ECDH_ECDSA_WITH_AES_128_SHA256:
+	 return "TLS1_ECDH_ECDSA_WITH_AES_128_SHA256";
+	case TLS1_CK_ECDH_ECDSA_WITH_AES_256_SHA384:
+	 return "TLS1_ECDH_ECDSA_WITH_AES_256_SHA384";
+	case TLS1_CK_ECDHE_RSA_WITH_AES_128_SHA256:
+	 return "TLS1_ECDHE_RSA_WITH_AES_128_SHA256";
+	case TLS1_CK_ECDHE_RSA_WITH_AES_256_SHA384:
+	 return "TLS1_ECDHE_RSA_WITH_AES_256_SHA384";
+	case TLS1_CK_ECDH_RSA_WITH_AES_128_SHA256:
+	 return "TLS1_ECDH_RSA_WITH_AES_128_SHA256";
+	case TLS1_CK_ECDH_RSA_WITH_AES_256_SHA384:
+	 return "TLS1_ECDH_RSA_WITH_AES_256_SHA384";
+
+	/* ECDH GCM based ciphersuites from RFC5289 */
+	case TLS1_CK_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:
+	 return "TLS1_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256";
+	case TLS1_CK_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384:
+	 return "TLS1_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384";
+	case TLS1_CK_ECDH_ECDSA_WITH_AES_128_GCM_SHA256:
+	 return "TLS1_ECDH_ECDSA_WITH_AES_128_GCM_SHA256";
+	case TLS1_CK_ECDH_ECDSA_WITH_AES_256_GCM_SHA384:
+	 return "TLS1_ECDH_ECDSA_WITH_AES_256_GCM_SHA384";
+	case TLS1_CK_ECDHE_RSA_WITH_AES_128_GCM_SHA256:
+	 return "TLS1_ECDHE_RSA_WITH_AES_128_GCM_SHA256";
+	case TLS1_CK_ECDHE_RSA_WITH_AES_256_GCM_SHA384:
+	 return "TLS1_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
+	case TLS1_CK_ECDH_RSA_WITH_AES_128_GCM_SHA256:
+	 return "TLS1_ECDH_RSA_WITH_AES_128_GCM_SHA256";
+	case TLS1_CK_ECDH_RSA_WITH_AES_256_GCM_SHA384:
+	 return "TLS1_ECDH_RSA_WITH_AES_256_GCM_SHA384";
+	default:
+		return c->name;
+	}
+}
+
+char *get_cipher_suite_list(SSL *ssl) {
+	char *cipher_suite;
+	cipher_suite = (char *) malloc(4096);
+	memset(cipher_suite, 0, sizeof(cipher_suite));
+	STACK_OF(SSL_CIPHER) *clnt = ssl->session->ciphers;
+	SSL_CIPHER *c;
+	SSL_CIPHER *current_cipher = ssl->session->cipher;
+	int i;
+	strcpy(cipher_suite,
+			"<h5>Algorithmes de chiffrement supportés :</h5>\n<table class=\"table table-striped table-condensed\">");
+	for (i = 0; i < sk_SSL_CIPHER_num(clnt); ++i) {
+		c = sk_SSL_CIPHER_value(clnt, i);
+		char tmp[100] = "";
+		if (current_cipher->id == c->id) {
+			sprintf(tmp,
+					"<tr class=\"success\"><td>%s</td><td>%d bits</td></tr>",
+					get_cipher_suite_string(c), c->alg_bits);
+		} else {
+			sprintf(tmp, "<tr><td>%s</td><td>%d bits</td></tr>",
+					get_cipher_suite_string(c), c->alg_bits);
+		}
+		strcat(cipher_suite, tmp);
+	}
+	strcat(cipher_suite, "</table>\n");
+	return cipher_suite;
+}
+
 char *get_analyze_page(SSL *ssl) {
 	int version = ssl->version;
-	char str_version[10];
-	memset(str_version, 0, sizeof(str_version));
-	switch (version) {
-	case SSL2_VERSION:
-		strcpy(str_version, "SSL 2.0");
-		break;
-	case SSL3_VERSION:
-		strcpy(str_version, "SSL 3.0 ");
-		break;
-	case TLS1_VERSION:
-		strcpy(str_version, "TLS 1.0 ");
-		break;
-	case TLS1_1_VERSION:
-		strcpy(str_version, "TLS 1.1 ");
-		break;
-	case TLS1_2_VERSION:
-		strcpy(str_version, "TLS 1.2 ");
-		break;
-	case DTLS1_VERSION:
-		strcpy(str_version, "DTLS 1.0 ");
-		break;
-	case DTLS1_BAD_VER:
-		strcpy(str_version, "DTLS 1.0 (bad) ");
-		break;
-	default:
-		strcpy(str_version, "???");
-	}
+	char *str_version = get_version(ssl);
 
-	char reply[BUF_SIZE] = "", cipher_suite[4096] = "", sig_algs[1024] = "",
-			reply_body[BUF_SIZE] = "", ecc[1024] = "";
+	char sig_algs[1024] = "", reply_body[BUF_SIZE] = "";
+	char *ecc = NULL;
+	char *reply = NULL;
+	reply = (char *) malloc(BUF_SIZE);
+
 	memset(reply, 0, sizeof(reply));
 	memset(reply_body, 0, sizeof(reply_body));
-	memset(cipher_suite, 0, sizeof(cipher_suite));
-	memset(ecc, 0, sizeof(ecc));
 
 	strcpy(reply,
 			"HTTP/1.1 200 OK\r\nStatus: 200 OK\r\nServer: RandomServer\r\nConnection: close\r\nContent-type: text/html; charset=utf-8\r\nContent-Length: ");
@@ -111,7 +606,7 @@ char *get_analyze_page(SSL *ssl) {
 	int nsig = SSL_get_sigalgs(ssl, -1, NULL, NULL, NULL, NULL, NULL);
 	if (nsig > 0) {
 		strcpy(sig_algs,
-				"<h5>Algorithmes de signatures :</h5>\n<table class=\"table table-striped\">");
+				"<h5>Algorithmes de signatures :</h5>\n<table class=\"table table-striped table-condensed\">");
 		for (int i = 0; i < nsig; i++) {
 			int hash_nid, sign_nid;
 			unsigned char rhash, rsign;
@@ -143,126 +638,13 @@ char *get_analyze_page(SSL *ssl) {
 		}
 		strcat(sig_algs, "</table>\n");
 	}
-	printf ("ssl->tlsext_ellipticcurvelist_length = %u", ssl->session->tlsext_ellipticcurvelist_length);
+
 	if (ssl->session->tlsext_ellipticcurvelist_length > 0) {
-		strcpy(ecc,
-				"<h5>Courbes elliptiques :</h5>\n");
-		unsigned char *clist = ssl->session->tlsext_ellipticcurvelist;
-		size_t clistlen = ssl->session->tlsext_ellipticcurvelist_length / 2;
-		size_t j;
-		unsigned int cid, nid;
-		for (size_t j = 0; j < clistlen; j++) {
-			n2s(clist, cid);
-			nid = tls1_ec_curve_id2nid(cid);
-			if (nid != 0) {
-				switch (nid) {
-				case NID_sect163k1: /* sect163k1 (1) */
-					strcat(ecc, "sect163k1");
-					break;
-				case NID_sect163r1: /* sect163r1 (2) */
-					strcat(ecc, "sect163r1");
-					break;
-				case NID_sect163r2: /* sect163r2 (3) */
-					strcat(ecc, "sect163r2");
-					break;
-				case NID_sect193r1: /* sect193r1 (4) */
-					strcat(ecc, "sect193r1");
-					break;
-				case NID_sect193r2: /* sect193r2 (5) */
-					strcat(ecc, "sect193r2");
-					break;
-				case NID_sect233k1: /* sect233k1 (6) */
-					strcat(ecc, "sect233k1");
-					break;
-				case NID_sect233r1: /* sect233r1 (7) */
-					strcat(ecc, "sect233r1");
-					break;
-				case NID_sect239k1: /* sect239k1 (8) */
-					strcat(ecc, "sect239k1");
-					break;
-				case NID_sect283k1: /* sect283k1 (9) */
-					strcat(ecc, "sect283k1");
-					break;
-				case NID_sect283r1: /* sect283r1 (10) */
-					strcat(ecc, "sect283r1");
-					break;
-				case NID_sect409k1: /* sect409k1 (11) */
-					strcat(ecc, "sect409k1");
-					break;
-				case NID_sect409r1: /* sect409r1 (12) */
-					strcat(ecc, "sect409r1");
-					break;
-				case NID_sect571k1: /* sect571k1 (13) */
-					strcat(ecc, "sect571k1");
-					break;
-				case NID_sect571r1: /* sect571r1 (14) */
-					strcat(ecc, "sect571r1");
-					break;
-				case NID_secp160k1: /* secp160k1 (15) */
-					strcat(ecc, "secp160k1");
-					break;
-				case NID_secp160r1: /* secp160r1 (16) */
-					strcat(ecc, "secp160r1");
-					break;
-				case NID_secp160r2: /* secp160r2 (17) */
-					strcat(ecc, "secp160r2");
-					break;
-				case NID_secp192k1: /* secp192k1 (18) */
-					strcat(ecc, "secp192k1");
-					break;
-				case NID_X9_62_prime192v1: /* secp192r1 (19) */
-					strcat(ecc, "secp192r1");
-					break;
-				case NID_secp224k1: /* secp224k1 (20) */
-					strcat(ecc, "secp224k1");
-					break;
-				case NID_secp224r1: /* secp224r1 (21) */
-					strcat(ecc, "secp224r1");
-					break;
-				case NID_secp256k1: /* secp256k1 (22) */
-					strcat(ecc, "secp256k1");
-					break;
-				case NID_X9_62_prime256v1: /* secp256r1 (23) */
-					strcat(ecc, "secp256r1");
-					break;
-				case NID_secp384r1: /* secp384r1 (24) */
-					strcat(ecc, "secp384r1");
-					break;
-				case NID_secp521r1: /* secp521r1 (25) */
-					strcat(ecc, "secp521r1");
-					break;
-				default:
-					break;
-				}
-				strcat(ecc, ", ");
-			}
-		}
-		ecc[strlen(ecc) - 2] = '\0';
+		ecc = get_ecc_list(ssl);
 	}
 
-	STACK_OF(SSL_CIPHER) *clnt = ssl->session->ciphers;
-	SSL_CIPHER *c;
-	SSL_CIPHER *current_cipher = ssl->session->cipher;
-	int i;
-	strcpy(cipher_suite,
-			"<h5>Algorithmes de chiffrement supportés :</h5>\n<table class=\"table table-striped\">");
-	for (i = 0; i < sk_SSL_CIPHER_num(clnt); ++i) {
-		c = sk_SSL_CIPHER_value(clnt, i);
-		char tmp[100] = "";
-		if (current_cipher->id == c->id) {
-			sprintf(tmp,
-					"<tr class=\"success\"><td>%s</td><td>%d bits</td></tr>",
-					c->name, c->alg_bits);
-		} else {
-			sprintf(tmp, "<tr><td>%s</td><td>%d bits</td></tr>", c->name,
-					c->alg_bits);
-		}
-		strcat(cipher_suite, tmp);
-	}
-	strcat(cipher_suite, "</table>\n");
 	char length[100];
 	memset(length, 0, sizeof(length));
-//sprintf(length, "%d\r\n\r\n", strlen(cipher_suite) + strlen (sig_algs) + 1);
 
 	strcpy(reply_body,
 			"<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />\n<title>Analyse navigateur client</title><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><link href=\"bootstrap/css/bootstrap.min.css\" rel=\"stylesheet\" media=\"screen\"></head><body>");
@@ -279,14 +661,19 @@ char *get_analyze_page(SSL *ssl) {
 	if (nsig > 0) {
 		strcat(reply_body, "<div class=\"row\"><div class=\"span6\">");
 	}
-	strcat(reply_body, cipher_suite);
-	if (nsig > 0 || strlen(ecc) > 0) {
+	strcat(reply_body, get_cipher_suite_list(ssl));
+	if (nsig > 0 || ecc != NULL) {
 		strcat(reply_body, "</div><div class=\"span6\">");
 		if (nsig > 0) {
 			strcat(reply_body, sig_algs);
 		}
-		if (strlen(ecc) > 0) {
+		if (ecc) {
 			strcat(reply_body, ecc);
+		}
+		if (ssl->tlsext_ticket_expected) {
+			strcat(reply_body, "<h5>Ticket de session : Oui</h5>");
+		} else {
+			strcat(reply_body, "<h5>Ticket de session : Non</h5>");
 		}
 		strcat(reply_body, "</div>");
 	}
@@ -296,6 +683,7 @@ char *get_analyze_page(SSL *ssl) {
 	sprintf(length, "%d\r\n\r\n", strlen(reply_body));
 	strcat(reply, length);
 	strcat(reply, reply_body);
+	return reply;
 }
 
 void *handle_connection(void * param) {
