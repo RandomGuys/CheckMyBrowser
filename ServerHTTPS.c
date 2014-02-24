@@ -49,6 +49,13 @@
   </div>\
 </div>"
 
+//#define FEW_BIT_REASON "Utilisation de clefs de chiffrement de taille inférieure à 128 bits"
+//#define NULL_REASON "Pas d'algorithme de chiffrement"
+//#define NULL_AUTH_REASON "Pas d'algorithme d'authentification, permet une attaque Man in the middle"
+
+#define DANGER_FEW_BIT 1
+#define DANGER_NULL 2
+#define DANGER_NULL_AUTH 3
 SocketTCP *ecoute;
 
 void sigaction(int s) {
@@ -69,18 +76,64 @@ void sigaction(int s) {
  * CD : 01 = RSA, 02 = DSA, 03 = ECDSA
  */
 
+int get_danger_of_cipher_suite(unsigned long cipher_id) {
+	printf("get_danger_of_cipher_suite\n");
+	switch (cipher_id) {
+	case SSL3_CK_EDH_RSA_DES_40_CBC_SHA:
+	case SSL3_CK_EDH_RSA_DES_64_CBC_SHA:
+	case SSL3_CK_DH_DSS_DES_40_CBC_SHA:
+	case SSL3_CK_DH_DSS_DES_64_CBC_SHA:
+	case SSL3_CK_DH_RSA_DES_40_CBC_SHA:
+	case SSL3_CK_DH_RSA_DES_64_CBC_SHA:
+	case SSL3_CK_ADH_DES_40_CBC_SHA:
+	case SSL3_CK_ADH_RC4_40_MD5:
+	case SSL3_CK_ADH_DES_64_CBC_SHA:
+	case SSL3_CK_RSA_DES_40_CBC_SHA:
+	case SSL3_CK_RSA_RC4_40_MD5:
+	case SSL3_CK_RSA_DES_64_CBC_SHA:
+	case SSL3_CK_KRB5_DES_40_CBC_MD5:
+	case SSL3_CK_KRB5_DES_40_CBC_SHA:
+	case SSL3_CK_KRB5_RC4_40_MD5:
+	case SSL3_CK_KRB5_RC4_40_SHA:
+	case SSL3_CK_KRB5_DES_64_CBC_MD5:
+	case SSL3_CK_KRB5_DES_64_CBC_SHA:
+	case TLS1_CK_DHE_DSS_EXPORT1024_WITH_DES_CBC_SHA:
+	case TLS1_CK_RSA_EXPORT1024_WITH_DES_CBC_SHA:
+	case TLS1_CK_DHE_DSS_EXPORT1024_WITH_RC4_56_SHA:
+		return DANGER_FEW_BIT;
+	case TLS1_CK_ECDH_RSA_WITH_NULL_SHA:
+	case TLS1_CK_ECDHE_ECDSA_WITH_NULL_SHA:
+	case TLS1_CK_ECDH_ECDSA_WITH_NULL_SHA:
+	case 0x03000000: // TLS_NULL_WITH_NULL_NULL
+	case TLS1_CK_RSA_WITH_NULL_SHA256:
+		return DANGER_NULL;
+	case TLS1_CK_ECDH_anon_WITH_NULL_SHA:
+	case TLS1_CK_ECDH_anon_WITH_DES_192_CBC3_SHA:
+	case TLS1_CK_ECDH_anon_WITH_AES_128_CBC_SHA:
+	case TLS1_CK_ECDH_anon_WITH_AES_256_CBC_SHA:
+	case TLS1_CK_ECDH_anon_WITH_RC4_128_SHA:
+	case TLS1_CK_SRP_SHA_WITH_3DES_EDE_CBC_SHA:
+	case TLS1_CK_SRP_SHA_WITH_AES_128_CBC_SHA:
+	case TLS1_CK_SRP_SHA_WITH_AES_256_CBC_SHA:
+		return DANGER_NULL_AUTH;
+	default:
+		return -1;
+	}
+}
+
 char *get_version(SSL *ssl) {
+	printf("get_version\n");
 	switch (ssl->version) {
 	case SSL2_VERSION:
-		return "SSL 2.0";
+		return "SSL 2.0 <span class=\"label label-danger\">MAUVAIS</span>";
 	case SSL3_VERSION:
-		return "SSL 3.0 ";
+		return "SSL 3.0 <span class=\"label label-danger\">MAUVAIS</span>";
 	case TLS1_VERSION:
-		return "TLS 1.0 ";
+		return "TLS 1.0 <span class=\"label label-danger\">MAUVAIS</span> ";
 	case TLS1_1_VERSION:
-		return "TLS 1.1 ";
+		return "TLS 1.1 <span class=\"label label-info\">OK</span>";
 	case TLS1_2_VERSION:
-		return "TLS 1.2 ";
+		return "TLS 1.2 <span class=\"label label-success\">BON</span>";
 	case DTLS1_VERSION:
 		return "DTLS 1.0 ";
 	case DTLS1_BAD_VER:
@@ -91,6 +144,7 @@ char *get_version(SSL *ssl) {
 }
 
 char *get_ecc_list(SSL *ssl) {
+	printf("get_ecc_list\n");
 	char *ecc = NULL;
 	ecc = (char *) malloc(1024);
 	memset(ecc, 0, sizeof(ecc));
@@ -105,79 +159,79 @@ char *get_ecc_list(SSL *ssl) {
 		if (nid != 0) {
 			switch (nid) {
 			case NID_sect163k1: /* sect163k1 (1) */
-				strcat(ecc, "sect163k1");
+				strcat(ecc, "sect163k1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect163r1: /* sect163r1 (2) */
-				strcat(ecc, "sect163r1");
+				strcat(ecc, "sect163r1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect163r2: /* sect163r2 (3) */
-				strcat(ecc, "sect163r2");
+				strcat(ecc, "sect163r2 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect193r1: /* sect193r1 (4) */
-				strcat(ecc, "sect193r1");
+				strcat(ecc, "sect193r1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect193r2: /* sect193r2 (5) */
-				strcat(ecc, "sect193r2");
+				strcat(ecc, "sect193r2 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect233k1: /* sect233k1 (6) */
-				strcat(ecc, "sect233k1");
+				strcat(ecc, "sect233k1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect233r1: /* sect233r1 (7) */
-				strcat(ecc, "sect233r1");
+				strcat(ecc, "sect233r1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect239k1: /* sect239k1 (8) */
-				strcat(ecc, "sect239k1");
+				strcat(ecc, "sect239k1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect283k1: /* sect283k1 (9) */
-				strcat(ecc, "sect283k1");
+				strcat(ecc, "sect283k1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect283r1: /* sect283r1 (10) */
-				strcat(ecc, "sect283r1");
+				strcat(ecc, "sect283r1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect409k1: /* sect409k1 (11) */
-				strcat(ecc, "sect409k1");
+				strcat(ecc, "sect409k1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect409r1: /* sect409r1 (12) */
-				strcat(ecc, "sect409r1");
+				strcat(ecc, "sect409r1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect571k1: /* sect571k1 (13) */
-				strcat(ecc, "sect571k1");
+				strcat(ecc, "sect571k1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_sect571r1: /* sect571r1 (14) */
-				strcat(ecc, "sect571r1");
+				strcat(ecc, "sect571r1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_secp160k1: /* secp160k1 (15) */
-				strcat(ecc, "secp160k1");
+				strcat(ecc, "secp160k1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_secp160r1: /* secp160r1 (16) */
-				strcat(ecc, "secp160r1");
+				strcat(ecc, "secp160r1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_secp160r2: /* secp160r2 (17) */
-				strcat(ecc, "secp160r2");
+				strcat(ecc, "secp160r2 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_secp192k1: /* secp192k1 (18) */
-				strcat(ecc, "secp192k1");
+				strcat(ecc, "secp192k1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_X9_62_prime192v1: /* secp192r1 (19) */
-				strcat(ecc, "secp192r1");
+				strcat(ecc, "secp192r1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_secp224k1: /* secp224k1 (20) */
-				strcat(ecc, "secp224k1");
+				strcat(ecc, "secp224k1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_secp224r1: /* secp224r1 (21) */
-				strcat(ecc, "secp224r1");
+				strcat(ecc, "secp224r1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_secp256k1: /* secp256k1 (22) */
-				strcat(ecc, "secp256k1");
+				strcat(ecc, "secp256k1 <span class=\"label label-default\">?</span>");
 				break;
 			case NID_X9_62_prime256v1: /* secp256r1 (23) */
-				strcat(ecc, "secp256r1");
+				strcat(ecc, "secp256r1 <span class=\"label label-success\">OK</span>");
 				break;
 			case NID_secp384r1: /* secp384r1 (24) */
-				strcat(ecc, "secp384r1");
+				strcat(ecc, "secp384r1 <span class=\"label label-success\">OK</span>");
 				break;
 			case NID_secp521r1: /* secp521r1 (25) */
-				strcat(ecc, "secp521r1");
+				strcat(ecc, "secp521r1 <span class=\"label label-default\">?</span>");
 				break;
 			default:
 				break;
@@ -190,6 +244,7 @@ char *get_ecc_list(SSL *ssl) {
 }
 
 char *get_cipher_suite_string(SSL_CIPHER *c) {
+	printf("get_cipher_suite_string\n");
 	switch (c->id) {
 	case SSL3_CK_RSA_NULL_MD5:
 		return "SSL3_RSA_NULL_MD5";
@@ -561,24 +616,44 @@ char *get_cipher_suite_string(SSL_CIPHER *c) {
 }
 
 char *get_cipher_suite_list(SSL *ssl) {
+	printf("get_cipher_suite_list\n");
 	char *cipher_suite;
-	cipher_suite = (char *) malloc(4096);
+	cipher_suite = (char *) malloc(8192);
 	memset(cipher_suite, 0, sizeof(cipher_suite));
 	STACK_OF(SSL_CIPHER) *clnt = ssl->session->ciphers;
 	SSL_CIPHER *c;
 	SSL_CIPHER *current_cipher = ssl->session->cipher;
 	int i;
 	strcpy(cipher_suite,
-			"<h5>Algorithmes de chiffrement supportés :</h5>\n<table class=\"table table-striped table-condensed\">");
+			"<h5>Algorithmes de chiffrement supportés :</h5>\n<table id=\"ciphersuites\" class=\"table table-striped table-condensed\">");
 	for (i = 0; i < sk_SSL_CIPHER_num(clnt); ++i) {
 		c = sk_SSL_CIPHER_value(clnt, i);
-		char tmp[100] = "";
-		if (current_cipher->id == c->id) {
+		char tmp[500] = "";
+		int danger = -1;
+		printf("Looking for danger\n");
+		danger = get_danger_of_cipher_suite(c->id);
+		if (danger > 0) {
+			printf("There is a danger: %d\n", danger);
+			switch (danger) {
+			case DANGER_FEW_BIT:
+				sprintf(tmp,"<tr><td><a class=\"danger\" href=\"#\" data-toggle=\"tooltip\" title=\"\" data-original-title=\"Utilisation de clefs de chiffrement de taille inférieure à 128 bits\"><span class=\"label label-danger\">&nbsp;</span> %s</a></td><td>%d bits</td></tr>",	 get_cipher_suite_string(c), c->alg_bits);
+				break;
+			case DANGER_NULL:
+				sprintf(tmp,"<tr><td><a class=\"danger\" href=\"#\" data-toggle=\"tooltip\" title=\"\" data-original-title=\"Pas d'algorithme de chiffrement\"><span class=\"label label-danger\">&nbsp;</span> %s</a></td><td>%d bits</td></tr>",	 get_cipher_suite_string(c), c->alg_bits);
+								break;
+			case DANGER_NULL_AUTH:
+				sprintf(tmp,"<tr><td><a class=\"danger\" href=\"#\" data-toggle=\"tooltip\" title=\"\" data-original-title=\"Pas d'algorithme d'authentification, permet une attaque Man in the middle\"><span class=\"label label-danger\">&nbsp;</span> %s</a></td><td>%d bits</td></tr>",	 get_cipher_suite_string(c), c->alg_bits);
+								break;
+			default:
+				break;
+			}
+
+		} else if (current_cipher->id == c->id) {
 			sprintf(tmp,
-					"<tr class=\"success\"><td>%s</td><td>%d bits</td></tr>",
+					"<tr class=\"success\"><td><span class=\"label label-success\">&nbsp;</span> %s</td><td>%d bits</td></tr>",
 					get_cipher_suite_string(c), c->alg_bits);
 		} else {
-			sprintf(tmp, "<tr><td>%s</td><td>%d bits</td></tr>",
+			sprintf(tmp, "<tr><td><span class=\"label label-success\">&nbsp;</span> %s</td><td>%d bits</td></tr>",
 					get_cipher_suite_string(c), c->alg_bits);
 		}
 		strcat(cipher_suite, tmp);
@@ -588,6 +663,7 @@ char *get_cipher_suite_list(SSL *ssl) {
 }
 
 char *get_sig_algs(SSL *ssl) {
+	printf("get_sig_algs\n");
 	char *sig_algs;
 	sig_algs = (char *) malloc(1024);
 	memset(sig_algs, 0, 1024);
@@ -642,8 +718,6 @@ char *get_analyze_page(SSL *ssl) {
 	strcpy(reply,
 			"HTTP/1.1 200 OK\r\nStatus: 200 OK\r\nServer: RandomServer\r\nConnection: close\r\nContent-type: text/html; charset=utf-8\r\nContent-Length: ");
 
-
-
 	if (ssl->session->tlsext_ellipticcurvelist_length > 0) {
 		ecc = get_ecc_list(ssl);
 	}
@@ -652,16 +726,16 @@ char *get_analyze_page(SSL *ssl) {
 	memset(length, 0, sizeof(length));
 
 	strcpy(reply_body,
-			"<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />\n<title>Analyse navigateur client</title><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><link href=\"bootstrap/css/bootstrap.min.css\" rel=\"stylesheet\" media=\"screen\"></head><body>");
+			"<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />\n<title>Analyse navigateur client</title><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><link href=\"bootstrap/css/bootstrap.min.css\" rel=\"stylesheet\" media=\"screen\"><script src=\"bootstrap/js/jquery-2.0.3.min.js\"></script><script src=\"bootstrap/js/bootstrap.min.js\"></script></head><body>");
 	strcat(reply_body, MENU_HTML);
 	strcat(reply_body, " <div class=\"container\"><h5>Version du protocole : ");
 	strcat(reply_body, str_version);
 	strcat(reply_body, "</h5>\n");
 	strcat(reply_body, "<h5>Compression : ");
 	if (ssl->compress) {
-		strcat(reply_body, "oui</h5>");
+		strcat(reply_body, "oui <span class=\"label label-danger\">MAUVAIS</span></h5>");
 	} else {
-		strcat(reply_body, "non</h5>");
+		strcat(reply_body, "non <span class=\"label label-success\">BON</span></h5>");
 	}
 	int nsig = SSL_get_sigalgs(ssl, -1, NULL, NULL, NULL, NULL, NULL);
 	if (nsig > 0) {
@@ -678,14 +752,18 @@ char *get_analyze_page(SSL *ssl) {
 			strcat(reply_body, ecc);
 		}
 		if (ssl->tlsext_ticket_expected) {
-			strcat(reply_body, "<h5>Ticket de session : Oui</h5>");
+			strcat(reply_body, "<h5>Ticket de session : Oui <span class=\"label label-success\">BON</span></h5>");
 		} else {
-			strcat(reply_body, "<h5>Ticket de session : Non</h5>");
+			strcat(reply_body, "<h5>Ticket de session : Non <span class=\"label label-danger\">MAUVAIS</span></h5>");
 		}
 		strcat(reply_body, "</div>");
 	}
 
-	strcat(reply_body, "</div></body></html>");
+	strcat(reply_body,
+			"</div><script>$(document).ready(function() { \
+             $('.danger').tooltip(); \
+             }); \
+			</script></body></html>");
 
 	sprintf(length, "%d\r\n\r\n", strlen(reply_body));
 	strcat(reply, length);
@@ -737,10 +815,10 @@ void *handle_connection(void * param) {
 		printf("HTTP REQUEST : %s\n", buf);
 		/*...process request */
 		char *s = strtok(buf, " ");
-		printf ("s = %s\n", s);
+		printf("s = %s\n", s);
 		char meth[10];
-		memset (meth, 0, 10);
-		strcpy (meth, s);
+		memset(meth, 0, 10);
+		strcpy(meth, s);
 
 		s = strtok(NULL, " ");
 		printf("s = %s, meth = %s\n", s, meth);
@@ -776,6 +854,9 @@ void *handle_connection(void * param) {
 				strcpy(message, "HTTP/1.1 200 OK\nContent-type: ");
 				if (strcmp(filename + strlen(filename) - 4, ".css") == 0) {
 					strcat(message, "text/css");
+				} else if (strcmp(filename + strlen(filename) - 3, ".js")
+						== 0) {
+					strcat(message, "application/javascript");
 				} else {
 					strcat(message, mime_type);
 				}
