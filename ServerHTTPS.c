@@ -26,8 +26,8 @@
 #define BUF_SIZE 10000
 
 #define NOT_FOUND "HTTP/1.1 404\r\nStatus: 404 \r\nServer: RandomServer\r\nConnection: close\r\nContent-type: text/html; charset=utf-8\r\nContent-Length: 10\r\n\r\nNot found"
-#define CERT_FILE "cert_tls_server.pem"
-#define KEY_FILE "key_tls_server.pem"
+#define CERT_FILE "server_certif_prod.pem"
+#define KEY_FILE "server_key_prod.pem"
 #define CAFILE "cert_tls_server.pem"
 #define CADIR NULL
 
@@ -37,12 +37,12 @@
 #define MENU_HTML "<div class=\"navbar navbar-inverse navbar-fixed-top\">\
   <div class=\"navbar-inner\">\
         <div class=\"container\">\
-          <a class=\"brand\" href=\"index.php\">RandomGuys</a>\
+          <a class=\"brand\" href=\"http://localhost/site/index.php\">RandomGuys</a>\
           <div class=\"nav-collapse collapse\">\
                 <ul class=\"nav\">\
-                  <li><a href=\"keys_stat.php\">Analyse des certificats</a></li>\
-                  <li><a href=\"audit_results.php\">Audit d'OpenSSL</a></li>\
-                  <li class=\"active\"><a href=\"scan_client.php\">Test du navigateur</a></li>\
+                  <li><a href=\"http://localhost/site/keys_stat.php\">Analyse des certificats</a></li>\
+                  <li><a href=\"http://localhost/site/audit_results.php\">Audit d'OpenSSL</a></li>\
+                  <li class=\"active\"><a href=\"https://localhost/site/analyze\">Test du navigateur</a></li>\
                 </ul>\
           </div>\
         </div>\
@@ -56,6 +56,8 @@
 #define DANGER_FEW_BIT 1
 #define DANGER_NULL 2
 #define DANGER_NULL_AUTH 3
+#define DANGER_MD5 4
+#define DANGER_SHA1 5
 SocketTCP *ecoute;
 
 void sigaction(int s) {
@@ -77,7 +79,6 @@ void sigaction(int s) {
  */
 
 int get_danger_of_cipher_suite(unsigned long cipher_id) {
-	printf("get_danger_of_cipher_suite\n");
 	switch (cipher_id) {
 	case SSL3_CK_EDH_RSA_DES_40_CBC_SHA:
 	case SSL3_CK_EDH_RSA_DES_64_CBC_SHA:
@@ -116,20 +117,105 @@ int get_danger_of_cipher_suite(unsigned long cipher_id) {
 	case TLS1_CK_SRP_SHA_WITH_AES_128_CBC_SHA:
 	case TLS1_CK_SRP_SHA_WITH_AES_256_CBC_SHA:
 		return DANGER_NULL_AUTH;
+	case SSL3_CK_RSA_NULL_MD5:
+case SSL3_CK_RSA_RC4_128_MD5:
+case SSL3_CK_RSA_RC2_40_MD5:
+case SSL3_CK_ADH_RC4_128_MD5:
+case SSL3_CK_KRB5_DES_192_CBC3_MD5:
+case SSL3_CK_KRB5_RC4_128_MD5:
+case SSL3_CK_KRB5_IDEA_128_CBC_MD5:
+case SSL3_CK_KRB5_RC2_40_CBC_MD5:
+case TLS1_CK_RSA_EXPORT1024_WITH_RC4_56_MD5:
+case TLS1_CK_RSA_EXPORT1024_WITH_RC2_CBC_56_MD5:
+		return DANGER_MD5;
+	case SSL3_CK_RSA_NULL_SHA:
+case SSL3_CK_RSA_RC4_128_SHA:
+case SSL3_CK_RSA_IDEA_128_SHA:
+case SSL3_CK_RSA_DES_192_CBC3_SHA:
+case SSL3_CK_DH_RSA_DES_192_CBC3_SHA:
+case SSL3_CK_EDH_DSS_DES_40_CBC_SHA:
+case SSL3_CK_EDH_DSS_DES_64_CBC_SHA:
+case SSL3_CK_EDH_DSS_DES_192_CBC3_SHA:
+case SSL3_CK_EDH_RSA_DES_192_CBC3_SHA:
+case SSL3_CK_ADH_DES_192_CBC_SHA:
+case SSL3_CK_KRB5_DES_192_CBC3_SHA:
+case SSL3_CK_KRB5_RC4_128_SHA:
+case SSL3_CK_KRB5_IDEA_128_CBC_SHA:
+case SSL3_CK_KRB5_RC2_40_CBC_SHA:
+case TLS1_CK_PSK_WITH_RC4_128_SHA:
+case TLS1_CK_PSK_WITH_3DES_EDE_CBC_SHA:
+case TLS1_CK_PSK_WITH_AES_128_CBC_SHA:
+case TLS1_CK_PSK_WITH_AES_256_CBC_SHA:
+case TLS1_CK_RSA_EXPORT1024_WITH_RC4_56_SHA:
+case TLS1_CK_DHE_DSS_WITH_RC4_128_SHA:
+case TLS1_CK_RSA_WITH_AES_128_SHA:
+case TLS1_CK_DH_DSS_WITH_AES_128_SHA:
+case TLS1_CK_DH_RSA_WITH_AES_128_SHA:
+case TLS1_CK_DHE_DSS_WITH_AES_128_SHA:
+case TLS1_CK_DHE_RSA_WITH_AES_128_SHA:
+case TLS1_CK_ADH_WITH_AES_128_SHA:
+case TLS1_CK_RSA_WITH_AES_256_SHA:
+case TLS1_CK_DH_DSS_WITH_AES_256_SHA:
+case TLS1_CK_DH_RSA_WITH_AES_256_SHA:
+case TLS1_CK_DHE_DSS_WITH_AES_256_SHA:
+case TLS1_CK_DHE_RSA_WITH_AES_256_SHA:
+case TLS1_CK_ADH_WITH_AES_256_SHA:
+case TLS1_CK_RSA_WITH_CAMELLIA_128_CBC_SHA:
+case TLS1_CK_DH_DSS_WITH_CAMELLIA_128_CBC_SHA:
+case TLS1_CK_DH_RSA_WITH_CAMELLIA_128_CBC_SHA:
+case TLS1_CK_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA:
+case TLS1_CK_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA:
+case TLS1_CK_ADH_WITH_CAMELLIA_128_CBC_SHA:
+case TLS1_CK_RSA_WITH_CAMELLIA_256_CBC_SHA:
+case TLS1_CK_DH_DSS_WITH_CAMELLIA_256_CBC_SHA:
+case TLS1_CK_DH_RSA_WITH_CAMELLIA_256_CBC_SHA:
+case TLS1_CK_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA:
+case TLS1_CK_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA:
+case TLS1_CK_ADH_WITH_CAMELLIA_256_CBC_SHA:
+case TLS1_CK_RSA_WITH_SEED_SHA:
+case TLS1_CK_DH_DSS_WITH_SEED_SHA:
+case TLS1_CK_DH_RSA_WITH_SEED_SHA:
+case TLS1_CK_DHE_DSS_WITH_SEED_SHA:
+case TLS1_CK_DHE_RSA_WITH_SEED_SHA:
+case TLS1_CK_ADH_WITH_SEED_SHA:
+case TLS1_CK_ECDH_ECDSA_WITH_RC4_128_SHA:
+case TLS1_CK_ECDH_ECDSA_WITH_DES_192_CBC3_SHA:
+case TLS1_CK_ECDH_ECDSA_WITH_AES_128_CBC_SHA:
+case TLS1_CK_ECDH_ECDSA_WITH_AES_256_CBC_SHA:
+case TLS1_CK_ECDHE_ECDSA_WITH_RC4_128_SHA:
+case TLS1_CK_ECDHE_ECDSA_WITH_DES_192_CBC3_SHA:
+case TLS1_CK_ECDHE_ECDSA_WITH_AES_128_CBC_SHA:
+case TLS1_CK_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:
+case TLS1_CK_ECDH_RSA_WITH_RC4_128_SHA:
+case TLS1_CK_ECDH_RSA_WITH_DES_192_CBC3_SHA:
+case TLS1_CK_ECDH_RSA_WITH_AES_128_CBC_SHA:
+case TLS1_CK_ECDH_RSA_WITH_AES_256_CBC_SHA:
+case TLS1_CK_ECDHE_RSA_WITH_NULL_SHA:
+case TLS1_CK_ECDHE_RSA_WITH_RC4_128_SHA:
+case TLS1_CK_ECDHE_RSA_WITH_DES_192_CBC3_SHA:
+case TLS1_CK_ECDHE_RSA_WITH_AES_128_CBC_SHA:
+case TLS1_CK_ECDHE_RSA_WITH_AES_256_CBC_SHA:
+case TLS1_CK_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA:
+case TLS1_CK_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA:
+case TLS1_CK_SRP_SHA_RSA_WITH_AES_128_CBC_SHA:
+case TLS1_CK_SRP_SHA_DSS_WITH_AES_128_CBC_SHA:
+case TLS1_CK_SRP_SHA_RSA_WITH_AES_256_CBC_SHA:
+case TLS1_CK_SRP_SHA_DSS_WITH_AES_256_CBC_SHA:
+	return DANGER_SHA1;
+
 	default:
 		return -1;
 	}
 }
 
 char *get_version(SSL *ssl) {
-	printf("get_version\n");
 	switch (ssl->version) {
 	case SSL2_VERSION:
-		return "SSL 2.0 <span class=\"label label-danger\">MAUVAIS</span>";
+		return "SSL 2.0 <span class=\"label label-important\">MAUVAIS</span>";
 	case SSL3_VERSION:
-		return "SSL 3.0 <span class=\"label label-danger\">MAUVAIS</span>";
+		return "SSL 3.0 <span class=\"label label-important\">MAUVAIS</span>";
 	case TLS1_VERSION:
-		return "TLS 1.0 <span class=\"label label-danger\">MAUVAIS</span> ";
+		return "TLS 1.0 <span class=\"label label-important\">MAUVAIS</span> ";
 	case TLS1_1_VERSION:
 		return "TLS 1.1 <span class=\"label label-info\">OK</span>";
 	case TLS1_2_VERSION:
@@ -144,7 +230,6 @@ char *get_version(SSL *ssl) {
 }
 
 char *get_ecc_list(SSL *ssl) {
-	printf("get_ecc_list\n");
 	char *ecc = NULL;
 	ecc = (char *) malloc(1024);
 	memset(ecc, 0, sizeof(ecc));
@@ -244,7 +329,6 @@ char *get_ecc_list(SSL *ssl) {
 }
 
 char *get_cipher_suite_string(SSL_CIPHER *c) {
-	printf("get_cipher_suite_string\n");
 	switch (c->id) {
 	case SSL3_CK_RSA_NULL_MD5:
 		return "SSL3_RSA_NULL_MD5";
@@ -616,7 +700,6 @@ char *get_cipher_suite_string(SSL_CIPHER *c) {
 }
 
 char *get_cipher_suite_list(SSL *ssl) {
-	printf("get_cipher_suite_list\n");
 	char *cipher_suite;
 	cipher_suite = (char *) malloc(8192);
 	memset(cipher_suite, 0, sizeof(cipher_suite));
@@ -630,7 +713,6 @@ char *get_cipher_suite_list(SSL *ssl) {
 		c = sk_SSL_CIPHER_value(clnt, i);
 		char tmp[500] = "";
 		int danger = -1;
-		printf("Looking for danger\n");
 		danger = get_danger_of_cipher_suite(c->id);
 		if (danger > 0) {
 			printf("There is a danger: %d\n", danger);
@@ -644,6 +726,11 @@ char *get_cipher_suite_list(SSL *ssl) {
 			case DANGER_NULL_AUTH:
 				sprintf(tmp,"<tr><td><a class=\"danger\" href=\"#\" data-toggle=\"tooltip\" title=\"\" data-original-title=\"Pas d'algorithme d'authentification, permet une attaque Man in the middle\"><span class=\"label label-danger\">&nbsp;</span> %s</a></td><td>%d bits</td></tr>",	 get_cipher_suite_string(c), c->alg_bits);
 								break;
+			case DANGER_MD5:
+				sprintf(tmp,"<tr class=\"error\"><td><a class=\"danger\" href=\"#\" data-toggle=\"tooltip\" title=\"\" data-original-title=\"MD5 est à proscrire de nos jours\"><span class=\"label label-important\">&nbsp;</span> %s</a></td><td>%d bits</td></tr>",	 get_cipher_suite_string(c), c->alg_bits);
+				break;
+			case DANGER_SHA1:
+				sprintf(tmp,"<tr class=\"warning\"><td><a class=\"danger\" href=\"#\" data-toggle=\"tooltip\" title=\"\" data-original-title=\"Il existe des attaques théoriques sur SHA-1\"><span class=\"label label-warning\">&nbsp;</span> %s</a></td><td>%d bits</td></tr>",	 get_cipher_suite_string(c), c->alg_bits);
 			default:
 				break;
 			}
@@ -663,7 +750,6 @@ char *get_cipher_suite_list(SSL *ssl) {
 }
 
 char *get_sig_algs(SSL *ssl) {
-	printf("get_sig_algs\n");
 	char *sig_algs;
 	sig_algs = (char *) malloc(1024);
 	memset(sig_algs, 0, 1024);
@@ -733,7 +819,7 @@ char *get_analyze_page(SSL *ssl) {
 	strcat(reply_body, "</h5>\n");
 	strcat(reply_body, "<h5>Compression : ");
 	if (ssl->compress) {
-		strcat(reply_body, "oui <span class=\"label label-danger\">MAUVAIS</span></h5>");
+		strcat(reply_body, "oui <span class=\"label label-important\">MAUVAIS</span></h5>");
 	} else {
 		strcat(reply_body, "non <span class=\"label label-success\">BON</span></h5>");
 	}
@@ -741,23 +827,37 @@ char *get_analyze_page(SSL *ssl) {
 	if (nsig > 0) {
 		strcat(reply_body, "<div class=\"row\"><div class=\"span6\">");
 	}
-	strcat(reply_body, get_cipher_suite_list(ssl));
+	char *cipher_suite = get_cipher_suite_list(ssl);
+	strcat(reply_body, cipher_suite);
+	free (cipher_suite);
 
+	
+	strcat(reply_body, "</div><div class=\"span6\">");
 	if (nsig > 0 || ecc != NULL) {
-		strcat(reply_body, "</div><div class=\"span6\">");
 		if (nsig > 0) {
-			strcat(reply_body, get_sig_algs(ssl));
+			char *sig_algs = get_sig_algs(ssl);
+			strcat(reply_body, sig_algs);
+			free (sig_algs);
 		}
 		if (ecc) {
 			strcat(reply_body, ecc);
+			free (ecc);
 		}
 		if (ssl->tlsext_ticket_expected) {
 			strcat(reply_body, "<h5>Ticket de session : Oui <span class=\"label label-success\">BON</span></h5>");
 		} else {
-			strcat(reply_body, "<h5>Ticket de session : Non <span class=\"label label-danger\">MAUVAIS</span></h5>");
+			strcat(reply_body, "<h5>Ticket de session : Non <span class=\"label label-important\">MAUVAIS</span></h5>");
 		}
-		strcat(reply_body, "</div>");
 	}
+	strcat(reply_body, "<h5>Légende :</h5>\n<table class=\"table table-striped table-condensed\"> \
+	<tr class=\"success\"><td>Suite en cours d'utilisation</td></tr>\
+	<tr><td><span class=\"label label-success\">&nbsp;</span> Suite acceptable</td></tr>\
+	<tr class=\"warning\"><td><span class=\"label label-warning\">&nbsp;</span> Attention à cette suite</td></tr>\
+	<tr class=\"error\"><td><span class=\"label label-important\">&nbsp;</span> Suite dangereuse</td></tr>\
+	</table><br /> \
+	<span class=\"label label-success\">BON</span></h5> <span class=\"label label-success\">OK</span></h5> : acceptable<br />\
+	<span class=\"label label-important\">MAUVAIS</span></h5> : dangereux<br />\
+	<span class=\"label label-default\">?</span> : probablement bon</div>");
 
 	strcat(reply_body,
 			"</div><script>$(document).ready(function() { \
@@ -772,6 +872,7 @@ char *get_analyze_page(SSL *ssl) {
 }
 
 void *handle_connection(void * param) {
+	printf ("---- BEGIN handle_connection\n");
 	SocketTCP *client = (SocketTCP *) param;
 
 	int bytes;
@@ -783,10 +884,20 @@ void *handle_connection(void * param) {
 	ctx = SSL_CTX_new(method); /* create context */
 //	if (SSL_CTX_load_verify_locations(ctx, CAFILE, CADIR) != 1)
 //		fprintf(stderr, "Error loading CA file or directory\n");
-	if (SSL_CTX_use_certificate_chain_file(ctx, CERT_FILE) != 1)
+	if (SSL_CTX_use_certificate_chain_file(ctx, CERT_FILE) != 1) {
 		fprintf(stderr, "Error loading certificate from file\n");
-	if (SSL_CTX_use_PrivateKey_file(ctx, KEY_FILE, SSL_FILETYPE_PEM) != 1)
-		fprintf(stderr, "Error loading private key from file\n");
+		SSL_CTX_free (ctx);
+		closeSocketTCP(client);
+		pthread_exit (0);
+		return NULL;;
+	}
+	if (SSL_CTX_use_PrivateKey_file(ctx, KEY_FILE, SSL_FILETYPE_PEM) != 1) {
+		printf(stderr, "Error loading private key from file\n");
+		SSL_CTX_free (ctx);
+		closeSocketTCP(client);
+		pthread_exit(0);
+		return NULL;
+	}
 
 	SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
 	SSL_CTX_set_cipher_list(ctx, "ALL");
@@ -794,12 +905,21 @@ void *handle_connection(void * param) {
 	SSL *ssl = SSL_new(ctx); /* get new SSL state with context */
 	if (ssl == NULL) {
 		fprintf(stderr, "Error creating SSL\n");
+		SSL_CTX_free (ctx);
+                closeSocketTCP(client);
+                pthread_exit(0);
+                return NULL;
+
 	}
 	SSL_set_fd(ssl, client->socket); /* set connection to SSL state */
 	SSL_set_mode(ctx, SSL_MODE_AUTO_RETRY);
 	if (SSL_accept(ssl) <= 0) { /* do SSL-protocol accept */
 		printf("SSL_accept failed\n");
 		ERR_print_errors_fp(stderr);
+		SSL_CTX_free (ctx);
+                closeSocketTCP(client);
+                pthread_exit(0);
+                return NULL;
 	}
 	printf("new SSL connection\n");
 
@@ -822,12 +942,12 @@ void *handle_connection(void * param) {
 
 		s = strtok(NULL, " ");
 		printf("s = %s, meth = %s\n", s, meth);
-		if (s != NULL && strcmp(s, "/analyze") == 0) {
+		if (s != NULL && strcmp(s, "/site/analyze") == 0) {
 			char *res = get_analyze_page(ssl);
 			printf("Reply = <%s>\n", res);
 			printf("Sending cipher suite... (%d bytes)\n", strlen(res));
 			SSL_write(ssl, res, strlen(res)); /* send reply */
-
+			free (res);
 			printf("Done.\n");
 			break;
 		} else if (s != NULL) {
@@ -878,6 +998,7 @@ void *handle_connection(void * param) {
 		memset(buf, 0, sizeof(buf));
 
 	}
+	printf ("bytes = %d\n", bytes);
 	if (bytes <= 0) {
 		ERR_print_errors_fp(stderr);
 	}
@@ -887,7 +1008,7 @@ void *handle_connection(void * param) {
 	SSL_shutdown(ssl);
 	closeSocketTCP(client);
 	SSL_free(ssl); /* release SSL state */
-
+	SSL_CTX_free (ctx);
 	pthread_exit(0);
 
 	return NULL;
@@ -939,7 +1060,7 @@ int main(int argc, char *argv[]) {
 	while (1) {
 		printf("Waiting for connection...\n");
 		client = acceptSocketTCP(ecoute);
-		printf("New connection !\n");
+		printf("New connection client = %d!\n", client->socket);
 		new_thread(client);
 	}
 	exit(EXIT_SUCCESS);
